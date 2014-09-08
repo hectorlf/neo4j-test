@@ -1,4 +1,10 @@
+/.gradle
 /bin
-/.classpath
-/.project
-/.settings
+
+/build
+/graph-data
+/lib
+.classpath
+.project
+
+
