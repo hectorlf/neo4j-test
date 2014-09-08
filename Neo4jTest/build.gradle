@@ -1,0 +1,20 @@
+apply plugin: 'java'
+apply plugin: 'application'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile("org.neo4j:neo4j:2.1.4")
+}
+
+mainClassName = "test.Neo4jTest"
+
+
+
+// gradle wrapper
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.1'
+}
