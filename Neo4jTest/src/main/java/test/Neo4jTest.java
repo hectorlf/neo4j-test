@@ -1,15 +1,20 @@
 package test;
 
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.neo4j.cypher.javacompat.ExecutionEngine;
-import org.neo4j.cypher.javacompat.ExecutionResult;
+import org.neo4j.cypher.ExecutionEngine;
+import org.neo4j.cypher.ExtendedExecutionResult;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
@@ -18,12 +23,11 @@ import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.NotFoundException;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
-import org.neo4j.graphdb.ResourceIterable;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.graphdb.schema.Schema;
-import org.neo4j.tooling.GlobalGraphOperations;
+import org.neo4j.kernel.impl.util.StringLogger;
 
 public class Neo4jTest {
 
@@ -32,8 +36,8 @@ public class Neo4jTest {
 	}
 
 	private static final int USER_COUNT = 100000;
-	private static final int MAX_CARDINALITY = 1000;
-	private static final float REL_PROBABILITY = 0.05f;
+	private static final int MAX_CARDINALITY = 500;
+	private static final float REL_PROBABILITY = 0.1f;
 	
 	private static final Label userLabel = DynamicLabel.label("user");
 	
@@ -52,7 +56,7 @@ public class Neo4jTest {
 			System.out.println("No se ha podido crear la base de datos");
 			System.exit(0);
 		}
-		ExecutionEngine engine = new ExecutionEngine(graphDb);
+		ExecutionEngine engine = new ExecutionEngine(graphDb, StringLogger.SYSTEM);
 		
 		Neo4jTest t = new Neo4jTest(graphDb, engine);
 		long start;
@@ -110,6 +114,19 @@ public class Neo4jTest {
 		t.findMostLiker();
 		System.out.println("Milisegundos utilizados: " + String.valueOf(System.currentTimeMillis() - start));
 
+		
+		idUser = rand.nextInt(Neo4jTest.USER_COUNT);
+		System.out.println("EN CYPHER: Buscando usuarios similares para el usuario " + idUser);
+		start = System.currentTimeMillis();
+		t.findWithCypherSimilarLikesForUser(idUser);
+		System.out.println("Milisegundos utilizados: " + String.valueOf(System.currentTimeMillis() - start));
+
+		System.out.println("EN CODIGO: Buscando usuarios similares para el usuario " + idUser);
+		start = System.currentTimeMillis();
+		t.findSimilarLikesForUser(idUser);
+		System.out.println("Milisegundos utilizados: " + String.valueOf(System.currentTimeMillis() - start));
+
+		
 		System.out.println();
 		}
 		System.out.println("Cerrando base de datos");
@@ -122,8 +139,8 @@ public class Neo4jTest {
 		Map<String,Object> params = new HashMap<String,Object>(2);
 		params.put("userId", Integer.valueOf(idA));
 		params.put("anotherId", Integer.valueOf(idB));
-		ExecutionResult result = engine.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user{id:{anotherId}})-[r2:LIKES]->(n) return n.id limit 1", params );
-		ResourceIterator<Integer> ids = result.columnAs("n.id");
+		ExtendedExecutionResult result = engine.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user{id:{anotherId}})-[r2:LIKES]->(n) return n.id limit 1", params );
+		ResourceIterator<Integer> ids = result.javaColumnAs("n.id");
 		if (ids.hasNext()) {
 			System.out.println("Se ha encontrado una relacion reflexiva entre los usuarios " + idA + " y " + idB);
 		} else {
@@ -167,8 +184,8 @@ public class Neo4jTest {
 		Transaction tx = graphDb.beginTx();
 		Map<String,Object> params = new HashMap<String,Object>(1);
 		params.put("userId", Integer.valueOf(idUser));
-		ExecutionResult result = engine.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return m.id limit 1", params );
-		ResourceIterator<Integer> ids = result.columnAs("m.id");
+		ExtendedExecutionResult result = engine.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return m.id limit 1", params );
+		ResourceIterator<Integer> ids = result.javaColumnAs("m.id");
 		if (ids.hasNext()) {
 			Integer id = ids.next();
 			System.out.println("Se ha encontrado una relacion entre los usuarios " + idUser + " y " + id);
@@ -210,8 +227,8 @@ public class Neo4jTest {
 
 	private void findWithCypherAnyReflexiveRelation() {
 		Transaction tx = graphDb.beginTx();
-		ExecutionResult result = engine.execute( "match (n:user)-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return n.id, m.id limit 1" );
-		ResourceIterator<Map<String,Object>> ids = result.iterator();
+		ExtendedExecutionResult result = engine.execute( "match (n:user)-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return n.id, m.id limit 1" );
+		ResourceIterator<Map<String,Object>> ids = result.javaIterator();
 		if (ids.hasNext()) {
 			Map<String,Object> entry = ids.next();
 			int foundIdA = ((Integer)entry.get("n.id")).intValue();
@@ -229,8 +246,7 @@ public class Neo4jTest {
 		int foundIdA = 0;
 		int foundIdB = 0;
 		Set<Long> trimmedNodes = new HashSet<Long>(100);
-		GlobalGraphOperations ops = GlobalGraphOperations.at(graphDb);
-		ResourceIterator<Node> nodes = ops.getAllNodesWithLabel(userLabel).iterator();
+		ResourceIterator<Node> nodes = graphDb.findNodes(userLabel);
 		while (nodes.hasNext()) {
 			Node n = nodes.next();
 			if (trimmedNodes.contains(Long.valueOf(n.getId()))) continue;
@@ -266,8 +282,7 @@ public class Neo4jTest {
 	private void findMostLiked() {
 		Transaction tx = graphDb.beginTx();
 		int[] likes = new int[USER_COUNT];
-		GlobalGraphOperations ops = GlobalGraphOperations.at(graphDb);
-		ResourceIterator<Node> nodes = ops.getAllNodesWithLabel(userLabel).iterator();
+		ResourceIterator<Node> nodes = graphDb.findNodes(userLabel);
 		while (nodes.hasNext()) {
 			Node n = nodes.next();
 			likes[(int)n.getId()] = n.getDegree(RelTypes.LIKES, Direction.INCOMING);
@@ -287,8 +302,7 @@ public class Neo4jTest {
 	private void findMostLiker() {
 		Transaction tx = graphDb.beginTx();
 		int[] likes = new int[USER_COUNT];
-		GlobalGraphOperations ops = GlobalGraphOperations.at(graphDb);
-		ResourceIterator<Node> nodes = ops.getAllNodesWithLabel(userLabel).iterator();
+		ResourceIterator<Node> nodes = graphDb.findNodes(userLabel);
 		while (nodes.hasNext()) {
 			Node n = nodes.next();
 			likes[(int)n.getId()] = n.getDegree(RelTypes.LIKES, Direction.OUTGOING);
@@ -305,13 +319,84 @@ public class Neo4jTest {
 		tx.success();
 		tx.close();
 	}
+
 	
+	private void findWithCypherSimilarLikesForUser(int idUser) {
+		Transaction tx = graphDb.beginTx();
+		Map<String,Object> params = new HashMap<String,Object>(1);
+		params.put("userId", Integer.valueOf(idUser));
+		ExtendedExecutionResult result = engine.execute("match (n:user{id:{userId}})<-[r:LIKES]-(m:user)-[r2:LIKES]->(t:user) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params );
+		ResourceIterator<Integer> ids = result.javaColumnAs("t.id");
+		if (ids.hasNext()) {
+			System.out.print("Se han encontrado los siguientes usuarios similares para el usuario " + idUser + ": ");
+			while (ids.hasNext()) {
+				Integer id = ids.next();
+				System.out.print(id + " ");
+			}
+			System.out.println();
+		} else {
+			System.out.println("No se ha encontrado ningún usuario similar para el usuario " + idUser);
+		}
+		tx.success();
+		tx.close();
+	}
+	private void findSimilarLikesForUser(int idUser) {
+		Transaction tx = graphDb.beginTx();
+		Node a = findUserById(idUser);
+		List<Node> likers = new LinkedList<Node>();
+		Iterator<Relationship> aRels = a.getRelationships(RelTypes.LIKES, Direction.INCOMING).iterator();
+		while (aRels.hasNext()) {
+			Relationship r = aRels.next();
+			Node m = r.getStartNode();
+			likers.add(m);
+		}
+		System.out.println("Numero de usuarios a los que les ha gustado el usuario: " + likers.size());
+		Map<Integer,Integer> similar = new HashMap<>(likers.size() * 100);
+		for (Node m : likers) {
+			Iterator<Relationship> mRels = m.getRelationships(RelTypes.LIKES, Direction.OUTGOING).iterator();
+			while (mRels.hasNext()) {
+				Relationship r2 = mRels.next();
+				Node t = r2.getEndNode();
+				if (t.equals(a)) continue;
+				Integer tId = (Integer)t.getProperty("id");
+				if (similar.containsKey(tId)) {
+					similar.put(tId, Integer.valueOf(similar.get(tId) + 1));
+				} else {
+					similar.put(tId, Integer.valueOf(1));
+				}
+			}
+		}
+		System.out.println("Numero de usuarios similares encontrados: " + similar.size());
+		if (similar.size() > 0) {
+			@SuppressWarnings("unchecked")
+			Entry<Integer,Integer>[] entries = new Entry[similar.entrySet().size()];
+			entries = similar.entrySet().toArray(entries);
+			Arrays.sort(entries, new Comparator<Entry>() {
+				@Override
+				public int compare(Entry arg0, Entry arg1) {
+					Entry<Integer,Integer> a0 = (Entry<Integer,Integer>)arg0;
+					Entry<Integer,Integer> a1 = (Entry<Integer,Integer>)arg1;
+					int c1 = a1.getValue().compareTo(a0.getValue());
+					if (c1 != 0) return c1;
+					else return a0.getKey().compareTo(a1.getKey());
+				}
+			});
+			System.out.print("Se han encontrado los siguientes usuarios similares para el usuario " + idUser + ": ");
+			int limit = entries.length > 5 ? 5 : entries.length;
+			for (int i = 0; i < limit; i++) {
+				System.out.print(entries[i].getKey() + "(" + entries[i].getValue() + ") ");
+			}
+			System.out.println();
+		} else {
+			System.out.println("No se ha encontrado ningún usuario similar para el usuario " + idUser);
+		}
+		tx.success();
+		tx.close();
+	}
 
 
 	private Node findUserById(int id) {
-		ResourceIterable<Node> results = graphDb.findNodesByLabelAndProperty(userLabel, "id", Integer.valueOf(id));
-		if (!results.iterator().hasNext()) return null;
-		return results.iterator().next();
+		return graphDb.findNode(userLabel, "id", Integer.valueOf(id));
 	}
 
 	
