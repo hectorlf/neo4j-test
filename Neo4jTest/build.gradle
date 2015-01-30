@@ -6,7 +6,7 @@ repositories {
 }
 
 dependencies {
-    compile("org.neo4j:neo4j:2.2.0-M01")
+    compile("org.neo4j:neo4j:2.2.0-M03")
 }
 
 mainClassName = "test.Neo4jTest"
