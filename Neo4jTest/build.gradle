@@ -1,12 +1,14 @@
 apply plugin: 'java'
 apply plugin: 'application'
+apply plugin: 'eclipse-wtp'
+
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compile("org.neo4j:neo4j:2.2.0-M03")
+    compile("org.neo4j:neo4j:2.2.0-RC01")
 }
 
 mainClassName = "test.Neo4jTest"
@@ -16,5 +18,5 @@ mainClassName = "test.Neo4jTest"
 // gradle wrapper
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '2.2.1'
+    gradleVersion = '2.3'
 }

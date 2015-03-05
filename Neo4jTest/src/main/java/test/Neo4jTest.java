@@ -13,8 +13,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.neo4j.cypher.ExecutionEngine;
-import org.neo4j.cypher.ExtendedExecutionResult;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
@@ -24,10 +22,10 @@ import org.neo4j.graphdb.NotFoundException;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterator;
+import org.neo4j.graphdb.Result;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.graphdb.schema.Schema;
-import org.neo4j.kernel.impl.util.StringLogger;
 
 public class Neo4jTest {
 
@@ -42,11 +40,9 @@ public class Neo4jTest {
 	private static final Label userLabel = DynamicLabel.label("user");
 	
 	private GraphDatabaseService graphDb;
-	private ExecutionEngine engine;
 	
-	public Neo4jTest(GraphDatabaseService graphDb, ExecutionEngine engine) {
+	public Neo4jTest(GraphDatabaseService graphDb) {
 		this.graphDb = graphDb;
-		this.engine = engine;
 	}
 
 	public static void main(String[] args) {
@@ -56,9 +52,8 @@ public class Neo4jTest {
 			System.out.println("No se ha podido crear la base de datos");
 			System.exit(0);
 		}
-		ExecutionEngine engine = new ExecutionEngine(graphDb, StringLogger.SYSTEM);
 		
-		Neo4jTest t = new Neo4jTest(graphDb, engine);
+		Neo4jTest t = new Neo4jTest(graphDb);
 		long start;
 
 		System.out.println("Inicializando base de datos");
@@ -139,8 +134,8 @@ public class Neo4jTest {
 		Map<String,Object> params = new HashMap<String,Object>(2);
 		params.put("userId", Integer.valueOf(idA));
 		params.put("anotherId", Integer.valueOf(idB));
-		ExtendedExecutionResult result = engine.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user{id:{anotherId}})-[r2:LIKES]->(n) return n.id limit 1", params );
-		ResourceIterator<Integer> ids = result.javaColumnAs("n.id");
+		Result result = graphDb.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user{id:{anotherId}})-[r2:LIKES]->(n) return n.id limit 1", params );
+		ResourceIterator<Integer> ids = result.columnAs("n.id");
 		if (ids.hasNext()) {
 			System.out.println("Se ha encontrado una relacion reflexiva entre los usuarios " + idA + " y " + idB);
 		} else {
@@ -184,8 +179,8 @@ public class Neo4jTest {
 		Transaction tx = graphDb.beginTx();
 		Map<String,Object> params = new HashMap<String,Object>(1);
 		params.put("userId", Integer.valueOf(idUser));
-		ExtendedExecutionResult result = engine.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return m.id limit 1", params );
-		ResourceIterator<Integer> ids = result.javaColumnAs("m.id");
+		Result result = graphDb.execute( "match (n:user{id:{userId}})-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return m.id limit 1", params );
+		ResourceIterator<Integer> ids = result.columnAs("m.id");
 		if (ids.hasNext()) {
 			Integer id = ids.next();
 			System.out.println("Se ha encontrado una relacion entre los usuarios " + idUser + " y " + id);
@@ -227,10 +222,9 @@ public class Neo4jTest {
 
 	private void findWithCypherAnyReflexiveRelation() {
 		Transaction tx = graphDb.beginTx();
-		ExtendedExecutionResult result = engine.execute( "match (n:user)-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return n.id, m.id limit 1" );
-		ResourceIterator<Map<String,Object>> ids = result.javaIterator();
-		if (ids.hasNext()) {
-			Map<String,Object> entry = ids.next();
+		Result result = graphDb.execute( "match (n:user)-[r:LIKES]->(m:user)-[r2:LIKES]->(n) return n.id, m.id limit 1" );
+		if (result.hasNext()) {
+			Map<String,Object> entry = result.next();
 			int foundIdA = ((Integer)entry.get("n.id")).intValue();
 			int foundIdB = ((Integer)entry.get("m.id")).intValue();
 			System.out.println("Se ha encontrado una relacion reflexiva entre los usuarios " + foundIdA + " y " + foundIdB);
@@ -325,8 +319,8 @@ public class Neo4jTest {
 		Transaction tx = graphDb.beginTx();
 		Map<String,Object> params = new HashMap<String,Object>(1);
 		params.put("userId", Integer.valueOf(idUser));
-		ExtendedExecutionResult result = engine.execute("match (n:user{id:{userId}})<-[r:LIKES]-(m:user)-[r2:LIKES]->(t:user) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params );
-		ResourceIterator<Integer> ids = result.javaColumnAs("t.id");
+		Result result = graphDb.execute("match (n:user{id:{userId}})<-[r:LIKES]-(m:user)-[r2:LIKES]->(t:user) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params );
+		ResourceIterator<Integer> ids = result.columnAs("t.id");
 		if (ids.hasNext()) {
 			System.out.print("Se han encontrado los siguientes usuarios similares para el usuario " + idUser + ": ");
 			while (ids.hasNext()) {
@@ -471,7 +465,7 @@ public class Neo4jTest {
 				if (rand.nextFloat() < REL_PROBABILITY) {
 					Node user2 = graphDb.getNodeById(rand.nextInt(USER_COUNT));
 					user1.createRelationshipTo(user2, RelTypes.LIKES);
-					if (numRels % 2000 == 0) {
+					if (numRels % 10000 == 0) {
 						tx.success();
 						tx.close();
 						tx = graphDb.beginTx();
