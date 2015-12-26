@@ -5,10 +5,17 @@ apply plugin: 'eclipse-wtp'
 
 repositories {
     mavenCentral()
+    maven {
+        url 'http://m2.neo4j.org/content/repositories/snapshots'
+    }
 }
 
 dependencies {
     compile("org.neo4j:neo4j:3.0.0-M02")
+	compile 'org.neo4j.driver:neo4j-java-driver:1.0-SNAPSHOT'
+	compile 'org.neo4j.test:neo4j-harness:3.0.0-M02'
+	
+	runtime 'org.javassist:javassist:3.20.0-GA'
 }
 
 mainClassName = "test.Neo4jTest"
