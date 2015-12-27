@@ -1,6 +1,5 @@
 package test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -11,13 +10,11 @@ import org.neo4j.driver.v1.Node;
 import org.neo4j.driver.v1.ResultCursor;
 import org.neo4j.driver.v1.Session;
 import org.neo4j.driver.v1.Values;
-import org.neo4j.harness.ServerControls;
-import org.neo4j.harness.internal.InProcessServerBuilder;
 
 public class Neo4jTest {
 
-	private static final int USER_COUNT = 100000;
-	private static final int MAX_CARDINALITY = 500;
+	private static final int USER_COUNT = 100;
+	private static final int MAX_CARDINALITY = 5;
 	private static final float REL_PROBABILITY = 0.1f;
 	
 	private final Driver driver;
@@ -28,10 +25,12 @@ public class Neo4jTest {
 
 	public static void main(String[] args) {
 		System.out.println("Creando base de datos");
+		/*
 		File dir = new File("build/graph-data");
 		dir.mkdirs();
 		InProcessServerBuilder serverBuilder = new InProcessServerBuilder(dir);
 		ServerControls server = serverBuilder.newServer();
+		*/
 		Driver driver = GraphDatabase.driver("bolt://localhost");
 		Neo4jTest t = new Neo4jTest(driver);
 		
@@ -85,7 +84,9 @@ public class Neo4jTest {
 		System.out.println();
 		}
 		System.out.println("Cerrando base de datos");
+		/*
 		server.close();
+		*/
 	}
 	
 
