@@ -236,10 +236,15 @@ public class Neo4jTest {
 	}
 
 	private Node getNode(Integer id) {
-		Session ses = driver.session();
-		ResultCursor r1 = ses.run("match (n:User) where n.id = {id} return n", Values.parameters("id", id));
-		if (!r1.single()) return null;
-		return r1.value(0).asNode();
+		Session ses = null;
+		try {
+			ses = driver.session();
+			ResultCursor r1 = ses.run("match (n:User) where n.id = {id} return n", Values.parameters("id", id));
+			if (!r1.single()) return null;
+			return r1.value(0).asNode();
+		} finally {
+			if (ses != null && ses.isOpen()) ses.close();
+		}
 	}
 
 }
