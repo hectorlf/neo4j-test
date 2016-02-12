@@ -6,16 +6,18 @@ import java.util.Random;
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.driver.v1.GraphDatabase;
 import org.neo4j.driver.v1.Node;
+import org.neo4j.driver.v1.Record;
 import org.neo4j.driver.v1.ResultCursor;
 import org.neo4j.driver.v1.Session;
 import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.Value;
 import org.neo4j.driver.v1.Values;
+import org.neo4j.driver.v1.exceptions.NoSuchRecordException;
 
 public class Neo4jTest {
 
-	private static final int USER_COUNT = 10000;
-	private static final int MAX_CARDINALITY = 500;
+	private static final int USER_COUNT = 1000;
+	private static final int MAX_CARDINALITY = 50;
 	private static final float REL_PROBABILITY = 0.1f;
 	
 	private final Driver driver;
@@ -95,7 +97,7 @@ public class Neo4jTest {
 		Session ses = driver.session();
 		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idA), "anotherId", Integer.valueOf(idB));
 		ResultCursor result = ses.run("match (n:User{id:{userId}})-[:LIKES]->(m:User{id:{anotherId}})-[:LIKES]->(n) return n.id limit 1", params);
-		if (result.single()) {
+		if (result.next()) {
 			System.out.println("Se ha encontrado una relacion reflexiva entre los usuarios " + idA + " y " + idB);
 		} else {
 			System.out.println("No se ha encontrado ninguna relacion reflexiva para los usuarios " + idA + " y " + idB);
@@ -108,10 +110,10 @@ public class Neo4jTest {
 		Session ses = driver.session();
 		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
 		ResultCursor result = ses.run("match (n:User{id:{userId}})-[r:LIKES]->(m:User)-[r2:LIKES]->(n) return m.id limit 1", params);
-		if (result.single()) {
-			Integer id = result.value(0).asInt();
+		try {
+			Integer id = result.single().get(0).asInt();
 			System.out.println("Se ha encontrado una relacion entre los usuarios " + idUser + " y " + id);
-		} else {
+		} catch(NoSuchRecordException nsre) {
 			System.out.println("No se ha encontrado ninguna relacion reflexiva para el usuario " + idUser);
 		}
 		ses.close();
@@ -121,11 +123,12 @@ public class Neo4jTest {
 	private void findWithCypherAnyReflexiveRelation() {
 		Session ses = driver.session();
 		ResultCursor result = ses.run("match (n:User)-[r:LIKES]->(m:User)-[r2:LIKES]->(n) return n.id, m.id limit 1");
-		if (result.single()) {
-			int foundIdA = result.value(0).asInt();
-			int foundIdB = result.value(1).asInt();
+		try {
+			Record r = result.single();
+			int foundIdA = r.get(0).asInt();
+			int foundIdB = r.get(1).asInt();
 			System.out.println("Se ha encontrado una relacion reflexiva entre los usuarios " + foundIdA + " y " + foundIdB);
-		} else {
+		} catch(NoSuchRecordException nsre) {
 			System.out.println("No se ha encontrado una relacion reflexiva entre ningun par de usuarios");
 		}
 		ses.close();
@@ -136,14 +139,14 @@ public class Neo4jTest {
 		Session ses = driver.session();
 		ResultCursor result = ses.run("match (n:User)<--() return n.id, count(*) as degree order by degree desc limit 1");
 		result.first();
-		System.out.println("El usuario con mayor numero de likes recibidos es " + result.value(0).asInt() + ", con " + result.value(1).asInt() + " relaciones");
+		System.out.println("El usuario con mayor numero de likes recibidos es " + result.get(0).asInt() + ", con " + result.get(1).asInt() + " relaciones");
 		ses.close();
 	}
 	private void findMostLiker() {
 		Session ses = driver.session();
 		ResultCursor result = ses.run("match (n:User)-->() return n.id, count(*) as degree order by degree desc limit 1");
 		result.first();
-		System.out.println("El usuario con mayor numero de likes enviados es " + result.value(0).asInt() + ", con " + result.value(1).asInt() + " relaciones");
+		System.out.println("El usuario con mayor numero de likes enviados es " + result.get(0).asInt() + ", con " + result.get(1).asInt() + " relaciones");
 		ses.close();
 	}
 
@@ -155,7 +158,7 @@ public class Neo4jTest {
 		if (result.size() > 0) {
 			System.out.print("Se han encontrado los siguientes usuarios similares para el usuario " + idUser + ": ");
 			while (result.next()) {
-				System.out.print(result.value(0).asInt() + " ");
+				System.out.print(result.get(0).asInt() + " ");
 			}
 			System.out.println();
 		} else {
@@ -172,7 +175,7 @@ public class Neo4jTest {
 		Random rand = new Random(System.currentTimeMillis());
 		
 		ResultCursor result = ses.run("match (n:User) return count(n)");
-		if (result.single() && result.value(0).asInt() > 0) {
+		if (result.next() && result.get(0).asInt() > 0) {
 			System.out.println("Ya existen usuarios en la base de datos");
 			return;
 		}
@@ -203,7 +206,7 @@ public class Neo4jTest {
 				if (rand.nextFloat() < REL_PROBABILITY) {
 					Node user2 = getNode(rand.nextInt(USER_COUNT));
 					if (user2 != null) {
-						tx.run("match (n:User {id:{nid}}), (m:User {id:{mid}}) with n,m create (n)-[:LIKES]->(m)", Values.parameters("nid", Integer.valueOf(i), "mid", user2.value("id").asInt()));
+						tx.run("match (n:User {id:{nid}}), (m:User {id:{mid}}) with n,m create (n)-[:LIKES]->(m)", Values.parameters("nid", Integer.valueOf(i), "mid", user2.get("id").asInt()));
 						numRels++;
 						if (numRels % 5000 == 0) {
 							tx.success();
@@ -225,8 +228,9 @@ public class Neo4jTest {
 		try {
 			ses = driver.session();
 			ResultCursor r1 = ses.run("match (n:User) where n.id = {id} return n", Values.parameters("id", id));
-			if (!r1.single()) return null;
-			return r1.value(0).asNode();
+			return r1.single().get(0).asNode();
+		} catch(NoSuchRecordException nsre) {
+			return null;
 		} finally {
 			if (ses != null && ses.isOpen()) ses.close();
 		}
