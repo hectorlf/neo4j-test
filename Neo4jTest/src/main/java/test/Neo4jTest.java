@@ -1,5 +1,6 @@
 package test;
 
+import java.io.File;
 import java.util.Map;
 import java.util.Random;
 
@@ -13,6 +14,9 @@ import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.Value;
 import org.neo4j.driver.v1.Values;
 import org.neo4j.driver.v1.exceptions.NoSuchRecordException;
+import org.neo4j.harness.ServerControls;
+import org.neo4j.harness.TestServerBuilder;
+import org.neo4j.harness.TestServerBuilders;
 
 public class Neo4jTest {
 
@@ -28,13 +32,11 @@ public class Neo4jTest {
 
 	public static void main(String[] args) {
 		System.out.println("Creando base de datos");
-		/*
 		File dir = new File("build/graph-data");
 		dir.mkdirs();
-		InProcessServerBuilder serverBuilder = new InProcessServerBuilder(dir);
-		ServerControls server = serverBuilder.newServer();
-		*/
-		Driver driver = GraphDatabase.driver("bolt://localhost");
+		TestServerBuilder tsb = TestServerBuilders.newInProcessBuilder(dir);
+		ServerControls server = tsb.newServer();
+		Driver driver = GraphDatabase.driver(server.boltURI());
 		Neo4jTest t = new Neo4jTest(driver);
 		
 		System.out.println("Inicializando base de datos");
@@ -87,9 +89,8 @@ public class Neo4jTest {
 		System.out.println();
 		}
 		System.out.println("Cerrando base de datos");
-		/*
+		
 		server.close();
-		*/
 	}
 	
 
@@ -152,10 +153,11 @@ public class Neo4jTest {
 
 
 	private void findWithCypherSimilarLikesForUser(int idUser) {
+	/*
 		Session ses = driver.session();
 		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
 		ResultCursor result = ses.run("match (n:User{id:{userId}})<-[:LIKES]-(m:User)-[:LIKES]->(t:User) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params);
-		if (result.size() > 0) {
+		if (result.peek() != null) {
 			System.out.print("Se han encontrado los siguientes usuarios similares para el usuario " + idUser + ": ");
 			while (result.next()) {
 				System.out.print(result.get(0).asInt() + " ");
@@ -165,6 +167,17 @@ public class Neo4jTest {
 			System.out.println("No se ha encontrado ning�n usuario similar para el usuario " + idUser);
 		}
 		ses.close();
+	*/
+		Session ses = driver.session();
+		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
+		ResultCursor result = ses.run("match (n:User{id:{userId}})", params);
+		if (result.size() > 0) {
+			System.out.print("Not empty!");
+		} else {
+			System.out.print("Empty!");
+		}
+		ses.close();
+
 	}
 
 
@@ -220,6 +233,7 @@ public class Neo4jTest {
 		}
 		tx.success();
 		tx.close();
+		ses.close();
 		System.out.println("Relaciones creadas: " + numRels);
 	}
 
