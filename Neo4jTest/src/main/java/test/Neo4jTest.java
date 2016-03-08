@@ -153,7 +153,6 @@ public class Neo4jTest {
 
 
 	private void findWithCypherSimilarLikesForUser(int idUser) {
-	/*
 		Session ses = driver.session();
 		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
 		ResultCursor result = ses.run("match (n:User{id:{userId}})<-[:LIKES]-(m:User)-[:LIKES]->(t:User) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params);
@@ -164,20 +163,9 @@ public class Neo4jTest {
 			}
 			System.out.println();
 		} else {
-			System.out.println("No se ha encontrado ning�n usuario similar para el usuario " + idUser);
+			System.out.println("No se ha encontrado ningun usuario similar para el usuario " + idUser);
 		}
 		ses.close();
-	*/
-		Session ses = driver.session();
-		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
-		ResultCursor result = ses.run("match (n:User{id:{userId}})", params);
-		if (result.size() > 0) {
-			System.out.print("Not empty!");
-		} else {
-			System.out.print("Empty!");
-		}
-		ses.close();
-
 	}
 
 
