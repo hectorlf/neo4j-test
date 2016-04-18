@@ -1,19 +1,18 @@
 package test;
 
 import java.io.File;
-import java.util.Map;
 import java.util.Random;
 
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.driver.v1.GraphDatabase;
-import org.neo4j.driver.v1.Node;
 import org.neo4j.driver.v1.Record;
-import org.neo4j.driver.v1.ResultCursor;
 import org.neo4j.driver.v1.Session;
+import org.neo4j.driver.v1.StatementResult;
 import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.Value;
 import org.neo4j.driver.v1.Values;
 import org.neo4j.driver.v1.exceptions.NoSuchRecordException;
+import org.neo4j.driver.v1.types.Node;
 import org.neo4j.harness.ServerControls;
 import org.neo4j.harness.TestServerBuilder;
 import org.neo4j.harness.TestServerBuilders;
@@ -96,9 +95,9 @@ public class Neo4jTest {
 
 	private void findWithCypherReflexiveRelationForUsers(int idA, int idB) {
 		Session ses = driver.session();
-		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idA), "anotherId", Integer.valueOf(idB));
-		ResultCursor result = ses.run("match (n:User{id:{userId}})-[:LIKES]->(m:User{id:{anotherId}})-[:LIKES]->(n) return n.id limit 1", params);
-		if (result.next()) {
+		Value params = Values.parameters("userId", Integer.valueOf(idA), "anotherId", Integer.valueOf(idB));
+		StatementResult result = ses.run("match (n:User{id:{userId}})-[:LIKES]->(m:User{id:{anotherId}})-[:LIKES]->(n) return n.id limit 1", params);
+		if (result.hasNext()) {
 			System.out.println("Se ha encontrado una relacion reflexiva entre los usuarios " + idA + " y " + idB);
 		} else {
 			System.out.println("No se ha encontrado ninguna relacion reflexiva para los usuarios " + idA + " y " + idB);
@@ -109,8 +108,8 @@ public class Neo4jTest {
 
 	private void findWithCypherReflexiveRelationForUser(int idUser) {
 		Session ses = driver.session();
-		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
-		ResultCursor result = ses.run("match (n:User{id:{userId}})-[r:LIKES]->(m:User)-[r2:LIKES]->(n) return m.id limit 1", params);
+		Value params = Values.parameters("userId", Integer.valueOf(idUser));
+		StatementResult result = ses.run("match (n:User{id:{userId}})-[r:LIKES]->(m:User)-[r2:LIKES]->(n) return m.id limit 1", params);
 		try {
 			Integer id = result.single().get(0).asInt();
 			System.out.println("Se ha encontrado una relacion entre los usuarios " + idUser + " y " + id);
@@ -123,7 +122,7 @@ public class Neo4jTest {
 
 	private void findWithCypherAnyReflexiveRelation() {
 		Session ses = driver.session();
-		ResultCursor result = ses.run("match (n:User)-[r:LIKES]->(m:User)-[r2:LIKES]->(n) return n.id, m.id limit 1");
+		StatementResult result = ses.run("match (n:User)-[r:LIKES]->(m:User)-[r2:LIKES]->(n) return n.id, m.id limit 1");
 		try {
 			Record r = result.single();
 			int foundIdA = r.get(0).asInt();
@@ -138,28 +137,29 @@ public class Neo4jTest {
 
 	private void findMostLiked() {
 		Session ses = driver.session();
-		ResultCursor result = ses.run("match (n:User)<--() return n.id, count(*) as degree order by degree desc limit 1");
-		result.first();
-		System.out.println("El usuario con mayor numero de likes recibidos es " + result.get(0).asInt() + ", con " + result.get(1).asInt() + " relaciones");
+		StatementResult result = ses.run("match (n:User)<--() return n.id, count(*) as degree order by degree desc limit 1");
+		Record r = result.next();
+		System.out.println("El usuario con mayor numero de likes recibidos es " + r.get(0).asInt() + ", con " + r.get(1).asInt() + " relaciones");
 		ses.close();
 	}
 	private void findMostLiker() {
 		Session ses = driver.session();
-		ResultCursor result = ses.run("match (n:User)-->() return n.id, count(*) as degree order by degree desc limit 1");
-		result.first();
-		System.out.println("El usuario con mayor numero de likes enviados es " + result.get(0).asInt() + ", con " + result.get(1).asInt() + " relaciones");
+		StatementResult result = ses.run("match (n:User)-->() return n.id, count(*) as degree order by degree desc limit 1");
+		Record r = result.next();
+		System.out.println("El usuario con mayor numero de likes enviados es " + r.get(0).asInt() + ", con " + r.get(1).asInt() + " relaciones");
 		ses.close();
 	}
 
 
 	private void findWithCypherSimilarLikesForUser(int idUser) {
 		Session ses = driver.session();
-		Map<String,Value> params = Values.parameters("userId", Integer.valueOf(idUser));
-		ResultCursor result = ses.run("match (n:User{id:{userId}})<-[:LIKES]-(m:User)-[:LIKES]->(t:User) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params);
-		if (result.peek() != null) {
+		Value params = Values.parameters("userId", Integer.valueOf(idUser));
+		StatementResult result = ses.run("match (n:User{id:{userId}})<-[:LIKES]-(m:User)-[:LIKES]->(t:User) where t <> n return distinct t.id, count(t) as num order by num desc, t.id asc limit 5", params);
+		if (result.hasNext()) {
 			System.out.print("Se han encontrado los siguientes usuarios similares para el usuario " + idUser + ": ");
-			while (result.next()) {
-				System.out.print(result.get(0).asInt() + " ");
+			while (result.hasNext()) {
+				Record r = result.next();
+				System.out.print(r.get(0).asInt() + " ");
 			}
 			System.out.println();
 		} else {
@@ -175,8 +175,8 @@ public class Neo4jTest {
 		Transaction tx = null;
 		Random rand = new Random(System.currentTimeMillis());
 		
-		ResultCursor result = ses.run("match (n:User) return count(n)");
-		if (result.next() && result.get(0).asInt() > 0) {
+		StatementResult result = ses.run("match (n:User) return count(n)");
+		if (result.hasNext() && result.next().get(0).asInt() > 0) {
 			System.out.println("Ya existen usuarios en la base de datos");
 			return;
 		}
@@ -229,7 +229,7 @@ public class Neo4jTest {
 		Session ses = null;
 		try {
 			ses = driver.session();
-			ResultCursor r1 = ses.run("match (n:User) where n.id = {id} return n", Values.parameters("id", id));
+			StatementResult r1 = ses.run("match (n:User) where n.id = {id} return n", Values.parameters("id", id));
 			return r1.single().get(0).asNode();
 		} catch(NoSuchRecordException nsre) {
 			return null;
