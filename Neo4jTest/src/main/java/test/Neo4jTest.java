@@ -3,6 +3,8 @@ package test;
 import java.io.File;
 import java.util.Random;
 
+import org.neo4j.driver.v1.Config;
+import org.neo4j.driver.v1.Config.EncryptionLevel;
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.driver.v1.GraphDatabase;
 import org.neo4j.driver.v1.Record;
@@ -19,7 +21,7 @@ import org.neo4j.harness.TestServerBuilders;
 
 public class Neo4jTest {
 
-	private static final int USER_COUNT = 1000;
+	private static final int USER_COUNT = 10000;
 	private static final int MAX_CARDINALITY = 50;
 	private static final float REL_PROBABILITY = 0.1f;
 	
@@ -35,7 +37,8 @@ public class Neo4jTest {
 		dir.mkdirs();
 		TestServerBuilder tsb = TestServerBuilders.newInProcessBuilder(dir);
 		ServerControls server = tsb.newServer();
-		Driver driver = GraphDatabase.driver(server.boltURI());
+		Config c = Config.build().withEncryptionLevel(EncryptionLevel.NONE).toConfig();
+		Driver driver = GraphDatabase.driver(server.boltURI(), c);
 		Neo4jTest t = new Neo4jTest(driver);
 		
 		System.out.println("Inicializando base de datos");
